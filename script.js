@@ -12,7 +12,11 @@ if(form){
     button.textContent='Sending...';
     status.textContent='Sending your request securely...';
     try{
-      const response=await fetch(form.action,{method:'POST',body:new FormData(form),headers:{Accept:'application/json'}});
+      const data=new FormData(form);
+      const customer=(data.get('name')||'New Customer').toString().trim();
+      const project=(data.get('type')||'Project Request').toString().trim();
+      data.set('_subject',`LA CORE ESTIMATE — ${customer} — ${project}`);
+      const response=await fetch(form.action,{method:'POST',body:data,headers:{Accept:'application/json'}});
       if(!response.ok)throw new Error('Submission failed');
       form.reset();
       status.textContent='Thank you! Your request has been sent to LA Core. We’ll be in touch soon.';
