@@ -136,7 +136,19 @@ async function punch(action){
   }else{
     ({data:rpcData,error:rpcError}=await db.rpc('crew_clock_out',{p_employee_id:employeeId,p_latitude:c.latitude,p_longitude:c.longitude,p_accuracy_meters:c.accuracy,p_device_id:deviceId,p_note:note.value||null}));
   }
-  if(rpcError)throw rpcError;
+  if(rpcError){
+    if(action==='CLOCK OUT' && /No active shift found/i.test(rpcError.message||'')){
+      await restoreActiveFromDatabase();
+      show('Shift already closed','This shift was already clocked out from another device. The screen has been synchronized with the database.');
+      return;
+    }
+    if(action==='CLOCK IN' && /already has an active shift/i.test(rpcError.message||'')){
+      await restoreActiveFromDatabase();
+      show('Shift already active','An active shift already exists. The screen has been synchronized with the database.');
+      return;
+    }
+    throw rpcError;
+  }
   send({_subject:'[LA CORE TIME] '+action+' | '+employee.value+' | '+job.value,type:'Crew Time Punch',action,employee:employee.value,job_site:job.value,work_category:category.value,note:note.value||'—',timestamp_local:now.toLocaleString(),timestamp_iso:now.toISOString(),latitude:c.latitude,longitude:c.longitude,gps_accuracy_meters:Math.round(c.accuracy),device_id:deviceId,database_record_id:rpcData,page:'LA Core Crew Portal'}).catch(()=>{});
   localStorage.setItem('lacore_last_employee',employee.value);
   if(action==='CLOCK IN'){
