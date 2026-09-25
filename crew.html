@@ -15,6 +15,7 @@ body:before{content:"";position:fixed;inset:0;pointer-events:none;background:rep
 .card{background:rgba(11,23,36,.94);border:1px solid rgba(215,180,74,.22);border-radius:18px;padding:22px;box-shadow:0 18px 50px rgba(0,0,0,.28);backdrop-filter:blur(10px)}
 .kicker{color:var(--gold);font-size:11px;font-weight:800;letter-spacing:.18em;text-transform:uppercase}.head{display:flex;justify-content:space-between;gap:12px;align-items:start}.head h1{font-size:28px;margin:7px 0 5px}.head p{margin:0;color:var(--muted);font-size:13px;line-height:1.5}.badge{font-size:10px;font-weight:800;letter-spacing:.08em;border:1px solid var(--line);padding:7px 9px;border-radius:999px;color:var(--muted)}
 label{display:block;margin-top:18px;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:#d2d8dd;font-weight:700}select,input,textarea{width:100%;margin-top:8px;background:#13283b;border:1px solid var(--line);color:#fff;padding:15px;border-radius:10px;font:inherit;font-size:16px;outline:none}select:focus,input:focus,textarea:focus{border-color:var(--gold);box-shadow:0 0 0 2px rgba(215,180,74,.14)}textarea{min-height:86px;resize:vertical}.location{margin-top:18px;border:1px solid var(--line);border-radius:12px;padding:13px;display:flex;gap:11px;align-items:flex-start;background:rgba(255,255,255,.025)}.dot{width:10px;height:10px;margin-top:4px;border-radius:50%;background:#74808b;flex:0 0 auto}.location b{display:block;font-size:13px}.location span{display:block;color:var(--muted);font-size:11px;line-height:1.45;margin-top:4px}.actions{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:20px}button{min-height:62px;border-radius:12px;font-weight:900;letter-spacing:.06em;font-size:15px;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}.clockin{background:var(--gold);color:var(--navy);border:1px solid var(--gold)}.clockout{background:transparent;color:#fff;border:1px solid #71808d}.help{width:100%;min-height:48px;margin-top:12px;background:transparent;color:var(--gold2);border:1px dashed #806d35;font-size:12px}.status{display:none;margin-top:16px;padding:16px;border-radius:12px;border:1px solid var(--line);background:#0d1c2a}.status.show{display:block}.status strong{display:block;font-size:16px}.status p{margin:6px 0 0;color:var(--muted);font-size:12px;line-height:1.55}.manual{display:none;margin-top:16px;border-top:1px solid var(--line);padding-top:2px}.manual.show{display:block}.manual h2{font-size:18px;margin:18px 0 0}.manual p{color:var(--muted);font-size:12px;line-height:1.5}.manual button{width:100%;margin-top:15px;background:#172d40;color:#fff;border:1px solid var(--gold);min-height:52px}.mini{margin-top:18px;text-align:center;color:#71808d;font-size:10px;line-height:1.5}.device{color:#8f9aa4}.error{color:#ffb1b1!important}.ok{color:#8fe0b8!important}
+.active-shift{display:none;margin:18px 0 4px;padding:20px;border-radius:15px;background:linear-gradient(145deg,#102b2b,#0c2029);border:1px solid rgba(66,184,131,.5);text-align:center}.active-shift.show{display:block}.active-shift .live{display:inline-flex;align-items:center;gap:7px;color:#8fe0b8;font-size:11px;font-weight:900;letter-spacing:.13em}.active-shift .live:before{content:"";width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 5px rgba(66,184,131,.12)}.active-shift h2{font-size:31px;margin:11px 0 5px;font-variant-numeric:tabular-nums}.active-shift .site{font-size:15px;font-weight:800}.active-shift .meta{color:var(--muted);font-size:11px;line-height:1.55;margin-top:7px}.active-shift .shiftout{width:100%;margin-top:16px;background:var(--gold);color:var(--navy);border:1px solid var(--gold)}.fields.locked{opacity:.55;pointer-events:none}.actions.clocked .clockin{display:none}.actions.clocked{grid-template-columns:1fr}.actions.clocked .clockout{border-color:var(--gold);color:var(--gold)}
 @media(max-width:430px){.shell{padding:16px 12px 34px}.card{padding:18px}.head h1{font-size:25px}.actions{grid-template-columns:1fr}.brand{justify-content:flex-start}.brand img{width:58px;height:58px}}
 </style>
 </head>
@@ -24,6 +25,9 @@ label{display:block;margin-top:18px;font-size:11px;letter-spacing:.1em;text-tran
   <section class="card">
     <div class="head"><div><span class="kicker">Crew Portal</span><h1>Time Clock</h1><p>Select your name and jobsite. Location is verified when you punch.</p></div><span class="badge" id="readyBadge">READY</span></div>
 
+    <div class="active-shift" id="activeShift"><span class="live">YOU'RE CLOCKED IN</span><h2 id="timer">00:00:00</h2><div class="site" id="activeSite"></div><div class="meta" id="activeMeta"></div><button type="button" class="shiftout" id="activeClockOut">CLOCK OUT</button></div>
+
+    <div id="fields" class="fields">
     <label for="employee">Employee</label>
     <select id="employee">
       <option value="">Select your name</option>
@@ -49,6 +53,7 @@ label{display:block;margin-top:18px;font-size:11px;letter-spacing:.1em;text-tran
     <label for="note">Note to Owner <span style="color:#77838d">(optional)</span></label>
     <textarea id="note" maxlength="500" placeholder="Anything Luis should know about today's work?"></textarea>
 
+    </div>
     <div class="location"><span class="dot" id="locDot"></span><div><b id="locTitle">Location check ready</b><span id="locText">Your phone will ask for location permission when you clock in or out.</span></div></div>
 
     <div class="actions"><button type="button" class="clockin" data-action="CLOCK IN">CLOCK IN</button><button type="button" class="clockout" data-action="CLOCK OUT">CLOCK OUT</button></div>
@@ -71,11 +76,24 @@ label{display:block;margin-top:18px;font-size:11px;letter-spacing:.1em;text-tran
 const ENDPOINT='https://formspree.io/f/meaoknlv';
 const $=id=>document.getElementById(id);
 const employee=$('employee'),job=$('job'),category=$('category'),note=$('note'),status=$('status'),statusTitle=$('statusTitle'),statusText=$('statusText'),locDot=$('locDot'),locTitle=$('locTitle'),locText=$('locText');
+const activeShift=$('activeShift'),timer=$('timer'),activeSite=$('activeSite'),activeMeta=$('activeMeta'),fields=$('fields'),actions=document.querySelector('.actions');
+let timerHandle=null;
 let deviceId=localStorage.getItem('lacore_device_id');
 if(!deviceId){deviceId='LC-'+crypto.getRandomValues(new Uint32Array(1))[0].toString(16).toUpperCase().padStart(8,'0');localStorage.setItem('lacore_device_id',deviceId)}
 $('deviceText').textContent='Device ID: '+deviceId;
 function show(title,text,error=false){status.classList.add('show');statusTitle.textContent=title;statusText.textContent=text;statusText.className=error?'error':'ok';status.scrollIntoView({behavior:'smooth',block:'nearest'})}
 function validate(){if(!employee.value||!job.value||!category.value){show('Missing information','Select your name, jobsite and work category first.',true);return false}return true}
+function activeKey(){return 'lacore_active_'+employee.value.toLowerCase().replace(/\s+/g,'_')}
+function formatElapsed(ms){const n=Math.max(0,Math.floor(ms/1000)),h=String(Math.floor(n/3600)).padStart(2,'0'),m=String(Math.floor((n%3600)/60)).padStart(2,'0'),sec=String(n%60).padStart(2,'0');return h+':'+m+':'+sec}
+function renderActive(data){
+ if(timerHandle){clearInterval(timerHandle);timerHandle=null}
+ if(!data){activeShift.classList.remove('show');fields.classList.remove('locked');actions.classList.remove('clocked');$('readyBadge').textContent='READY';return}
+ employee.value=data.employee;job.value=data.job;category.value=data.category;
+ activeShift.classList.add('show');fields.classList.add('locked');actions.classList.add('clocked');$('readyBadge').textContent='ON CLOCK';
+ activeSite.textContent=data.job;const start=new Date(data.started);activeMeta.textContent=data.employee+' · '+data.category+' · Started '+start.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'});
+ const tick=()=>timer.textContent=formatElapsed(Date.now()-start.getTime());tick();timerHandle=setInterval(tick,1000);
+}
+function restoreActive(){const who=employee.value;if(!who){renderActive(null);return}try{renderActive(JSON.parse(localStorage.getItem(activeKey())))}catch(e){renderActive(null)}}
 function position(){return new Promise((resolve,reject)=>{if(!navigator.geolocation)return reject(new Error('Location is not supported on this device.'));navigator.geolocation.getCurrentPosition(resolve,reject,{enableHighAccuracy:true,timeout:12000,maximumAge:0})})}
 async function send(data){const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(data)});if(!r.ok)throw new Error('Submission could not be sent.');return r}
 async function punch(action){
@@ -87,12 +105,22 @@ async function punch(action){
   locDot.style.background='var(--green)';locTitle.textContent='Location captured';locText.textContent='Accuracy: approximately '+Math.round(c.accuracy)+' meters.';
   await send({_subject:'[LA CORE TIME] '+action+' | '+employee.value+' | '+job.value,type:'Crew Time Punch',action,employee:employee.value,job_site:job.value,work_category:category.value,note:note.value||'—',timestamp_local:now.toLocaleString(),timestamp_iso:now.toISOString(),latitude:c.latitude,longitude:c.longitude,gps_accuracy_meters:Math.round(c.accuracy),device_id:deviceId,page:'LA Core Crew Portal'});
   localStorage.setItem('lacore_last_employee',employee.value);
+  if(action==='CLOCK IN'){
+    const shift={employee:employee.value,job:job.value,category:category.value,started:now.toISOString()};
+    localStorage.setItem(activeKey(),JSON.stringify(shift));renderActive(shift);
+  }else{
+    let prior=null;try{prior=JSON.parse(localStorage.getItem(activeKey()))}catch(e){}
+    localStorage.removeItem(activeKey());renderActive(null);
+    if(prior){const elapsed=formatElapsed(now-new Date(prior.started));show('✓ CLOCK OUT RECORDED',employee.value+' · '+job.value+' · '+now.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' · Shift duration '+elapsed+' · GPS captured');note.value='';return}
+  }
   show('✓ '+action+' RECORDED',employee.value+' · '+job.value+' · '+now.toLocaleTimeString([],{hour:'numeric',minute:'2-digit'})+' · GPS captured');
   note.value='';
  }catch(e){locDot.style.background='var(--red)';locTitle.textContent='Location or submission failed';locText.textContent=e.message||'We could not complete the punch.';show('Punch not recorded','Use the manual time request below and briefly tell Luis what happened.',true);$('manual').classList.add('show')}
  finally{document.querySelectorAll('[data-action]').forEach(b=>b.disabled=false)}
 }
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>punch(b.dataset.action)));
+$('activeClockOut').addEventListener('click',()=>punch('CLOCK OUT'));
+employee.addEventListener('change',restoreActive);
 $('helpBtn').addEventListener('click',()=>{$('manual').classList.toggle('show');if($('manual').classList.contains('show'))$('manual').scrollIntoView({behavior:'smooth',block:'nearest'})});
 $('manualSubmit').addEventListener('click',async()=>{
  if(!validate())return;const reason=$('reason').value.trim(),requested=$('requestedTime').value;
@@ -102,7 +130,7 @@ $('manualSubmit').addEventListener('click',async()=>{
  catch(e){show('Request not sent','Please contact Luis directly. '+(e.message||''),true)}
  finally{$('manualSubmit').disabled=false}
 });
-const last=localStorage.getItem('lacore_last_employee');if(last&&[...employee.options].some(o=>o.value===last))employee.value=last;
+const last=localStorage.getItem('lacore_last_employee');if(last&&[...employee.options].some(o=>o.value===last))employee.value=last;restoreActive();
 })();
 </script>
 </body></html>
