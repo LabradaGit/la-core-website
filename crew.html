@@ -71,9 +71,14 @@ label{display:block;margin-top:18px;font-size:11px;letter-spacing:.1em;text-tran
   </section>
   <div class="mini">LA Core Development Group LLC · Crew use only<br><span class="device" id="deviceText"></span></div>
 </main>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (()=>{
 const ENDPOINT='https://formspree.io/f/meaoknlv';
+const SUPABASE_URL='https://cftnybwpiqmovugcbpgf.supabase.co';
+const SUPABASE_KEY='sb_publishable_-V5oytvKBz4DaqK7S42PCw_jSXepNkH';
+const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let employeeMap=new Map(), projectMap=new Map();
 const $=id=>document.getElementById(id);
 const employee=$('employee'),job=$('job'),category=$('category'),note=$('note'),status=$('status'),statusTitle=$('statusTitle'),statusText=$('statusText'),locDot=$('locDot'),locTitle=$('locTitle'),locText=$('locText');
 const activeShift=$('activeShift'),timer=$('timer'),activeSite=$('activeSite'),activeMeta=$('activeMeta'),fields=$('fields'),actions=document.querySelector('.actions');
@@ -83,6 +88,26 @@ if(!deviceId){deviceId='LC-'+crypto.getRandomValues(new Uint32Array(1))[0].toStr
 $('deviceText').textContent='Device ID: '+deviceId;
 function show(title,text,error=false){status.classList.add('show');statusTitle.textContent=title;statusText.textContent=text;statusText.className=error?'error':'ok';status.scrollIntoView({behavior:'smooth',block:'nearest'})}
 function validate(){if(!employee.value||!job.value||!category.value){show('Missing information','Select your name, jobsite and work category first.',true);return false}return true}
+async function loadDatabaseOptions(){
+ const [{data:emps,error:ee},{data:projs,error:pe}]=await Promise.all([db.rpc('crew_active_employees'),db.rpc('crew_active_projects')]);
+ if(ee||pe)throw ee||pe;
+ const last=localStorage.getItem('lacore_last_employee');
+ employee.innerHTML='<option value="">Select your name</option>'; employeeMap=new Map();
+ emps.forEach(e=>{employeeMap.set(e.full_name,e.id);employee.add(new Option(e.full_name,e.full_name))});
+ job.innerHTML='<option value="">Select job site</option>'; projectMap=new Map();
+ projs.forEach(p=>{projectMap.set(p.name,p.id);job.add(new Option(p.name,p.name))});
+ if(last&&employeeMap.has(last))employee.value=last;
+ await restoreActiveFromDatabase();
+}
+async function restoreActiveFromDatabase(){
+ if(!employee.value){renderActive(null);return}
+ const id=employeeMap.get(employee.value);if(!id){renderActive(null);return}
+ const {data,error}=await db.rpc('crew_open_shift',{p_employee_id:id});if(error)throw error;
+ const row=data&&data[0];
+ if(!row){localStorage.removeItem(activeKey());renderActive(null);return}
+ const shift={employee:row.employee_name,job:row.project_name,category:row.work_category,started:row.clock_in,punchId:row.punch_id};
+ localStorage.setItem(activeKey(),JSON.stringify(shift));renderActive(shift);
+}
 function activeKey(){return 'lacore_active_'+employee.value.toLowerCase().replace(/\s+/g,'_')}
 function formatElapsed(ms){const n=Math.max(0,Math.floor(ms/1000)),h=String(Math.floor(n/3600)).padStart(2,'0'),m=String(Math.floor((n%3600)/60)).padStart(2,'0'),sec=String(n%60).padStart(2,'0');return h+':'+m+':'+sec}
 function renderActive(data){
@@ -98,16 +123,24 @@ function position(){return new Promise((resolve,reject)=>{if(!navigator.geolocat
 async function send(data){const r=await fetch(ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify(data)});if(!r.ok)throw new Error('Submission could not be sent.');return r}
 async function punch(action){
  if(!validate())return;
+ const employeeId=employeeMap.get(employee.value),projectId=projectMap.get(job.value);
+ if(!employeeId||!projectId){show('Database not ready','Refresh the page and try again.',true);return}
  document.querySelectorAll('[data-action]').forEach(b=>b.disabled=true);
  locTitle.textContent='Checking location…';locText.textContent='Keep this page open for a moment.';
  try{
   const p=await position(),c=p.coords,now=new Date();
   locDot.style.background='var(--green)';locTitle.textContent='Location captured';locText.textContent='Accuracy: approximately '+Math.round(c.accuracy)+' meters.';
-  await send({_subject:'[LA CORE TIME] '+action+' | '+employee.value+' | '+job.value,type:'Crew Time Punch',action,employee:employee.value,job_site:job.value,work_category:category.value,note:note.value||'—',timestamp_local:now.toLocaleString(),timestamp_iso:now.toISOString(),latitude:c.latitude,longitude:c.longitude,gps_accuracy_meters:Math.round(c.accuracy),device_id:deviceId,page:'LA Core Crew Portal'});
+  let rpcData,rpcError;
+  if(action==='CLOCK IN'){
+    ({data:rpcData,error:rpcError}=await db.rpc('crew_clock_in',{p_employee_id:employeeId,p_project_id:projectId,p_work_category:category.value,p_latitude:c.latitude,p_longitude:c.longitude,p_accuracy_meters:c.accuracy,p_device_id:deviceId,p_note:note.value||null}));
+  }else{
+    ({data:rpcData,error:rpcError}=await db.rpc('crew_clock_out',{p_employee_id:employeeId,p_latitude:c.latitude,p_longitude:c.longitude,p_accuracy_meters:c.accuracy,p_device_id:deviceId,p_note:note.value||null}));
+  }
+  if(rpcError)throw rpcError;
+  send({_subject:'[LA CORE TIME] '+action+' | '+employee.value+' | '+job.value,type:'Crew Time Punch',action,employee:employee.value,job_site:job.value,work_category:category.value,note:note.value||'—',timestamp_local:now.toLocaleString(),timestamp_iso:now.toISOString(),latitude:c.latitude,longitude:c.longitude,gps_accuracy_meters:Math.round(c.accuracy),device_id:deviceId,database_record_id:rpcData,page:'LA Core Crew Portal'}).catch(()=>{});
   localStorage.setItem('lacore_last_employee',employee.value);
   if(action==='CLOCK IN'){
-    const shift={employee:employee.value,job:job.value,category:category.value,started:now.toISOString()};
-    localStorage.setItem(activeKey(),JSON.stringify(shift));renderActive(shift);
+    await restoreActiveFromDatabase();
   }else{
     let prior=null;try{prior=JSON.parse(localStorage.getItem(activeKey()))}catch(e){}
     localStorage.removeItem(activeKey());renderActive(null);
@@ -120,17 +153,23 @@ async function punch(action){
 }
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>punch(b.dataset.action)));
 $('activeClockOut').addEventListener('click',()=>punch('CLOCK OUT'));
-employee.addEventListener('change',restoreActive);
+employee.addEventListener('change',()=>restoreActiveFromDatabase().catch(e=>show('Database error',e.message,true)));
 $('helpBtn').addEventListener('click',()=>{$('manual').classList.toggle('show');if($('manual').classList.contains('show'))$('manual').scrollIntoView({behavior:'smooth',block:'nearest'})});
 $('manualSubmit').addEventListener('click',async()=>{
  if(!validate())return;const reason=$('reason').value.trim(),requested=$('requestedTime').value;
  if(!reason||!requested){show('Manual request incomplete','Enter the requested time and briefly describe what happened.',true);return}
  $('manualSubmit').disabled=true;
- try{const now=new Date();await send({_subject:'[LA CORE TIME] MANUAL REQUEST | '+employee.value+' | '+job.value,type:'Manual Time Request',employee:employee.value,job_site:job.value,work_category:category.value,request:$('manualAction').value,requested_time:requested,reason,note:note.value||'—',submitted_local:now.toLocaleString(),submitted_iso:now.toISOString(),device_id:deviceId,page:'LA Core Crew Portal'});show('✓ REQUEST SENT','Luis received your manual time request for review. Your timesheet has not been changed automatically.');$('reason').value=''}
+ try{const now=new Date(),employeeId=employeeMap.get(employee.value),projectId=projectMap.get(job.value);
+ const reqMap={'Clock In':'clock_in','Clock Out':'clock_out','Correct Time':'correct_time'};
+ const requestedIso=new Date(now.toDateString()+' '+requested).toISOString();
+ const {data,error}=await db.rpc('crew_manual_time_request',{p_employee_id:employeeId,p_project_id:projectId,p_request_type:reqMap[$('manualAction').value],p_requested_time:requestedIso,p_reason:reason,p_device_id:deviceId});
+ if(error)throw error;
+ send({_subject:'[LA CORE TIME] MANUAL REQUEST | '+employee.value+' | '+job.value,type:'Manual Time Request',employee:employee.value,job_site:job.value,work_category:category.value,request:$('manualAction').value,requested_time:requested,reason,note:note.value||'—',submitted_local:now.toLocaleString(),submitted_iso:now.toISOString(),device_id:deviceId,database_record_id:data,page:'LA Core Crew Portal'}).catch(()=>{});
+ show('✓ REQUEST SENT','Luis received your manual time request for review. Your timesheet has not been changed automatically.');$('reason').value=''}
  catch(e){show('Request not sent','Please contact Luis directly. '+(e.message||''),true)}
  finally{$('manualSubmit').disabled=false}
 });
-const last=localStorage.getItem('lacore_last_employee');if(last&&[...employee.options].some(o=>o.value===last))employee.value=last;restoreActive();
+loadDatabaseOptions().catch(e=>show('Database connection error','The crew database could not be loaded. '+e.message,true));
 })();
 </script>
 </body></html>
