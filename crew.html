@@ -104,7 +104,7 @@ async function loadDatabaseOptions(){
  await loadMyTime();
 }
 
-async function loadAssignedProjects(){const employeeId=employeeMap.get(employee.value);job.innerHTML='<option value="">Select job site</option>';projectMap=new Map();if(!employeeId){allProjects.forEach(p=>{projectMap.set(p.name,p.id);job.add(new Option(p.name,p.name))});return}const {data,error}=await db.from('assignments').select('project_id,projects(id,name,active)').eq('employee_id',employeeId).eq('active',true);if(error){show('Assignment lookup failed','Your assigned jobsites could not be loaded. Refresh and try again.',true);return}const assigned=(data||[]).map(a=>a.projects).filter(p=>p&&p.active!==false);assigned.forEach(p=>{projectMap.set(p.name,p.id);job.add(new Option(p.name,p.name))});if(!assigned.length)job.add(new Option('No active project assignments','',true,true))}
+async function loadAssignedProjects(){const employeeId=employeeMap.get(employee.value);job.innerHTML='<option value="">Select job site</option>';projectMap=new Map();if(!employeeId){allProjects.forEach(p=>{projectMap.set(p.name,p.id);job.add(new Option(p.name,p.name))});return}const {data,error}=await db.rpc('crew_assigned_projects',{p_employee_id:employeeId});if(error){show('Assignment lookup failed','Your assigned jobsites could not be loaded. Refresh and try again.',true);return}const assigned=data||[];assigned.forEach(p=>{projectMap.set(p.project_name,p.project_id);job.add(new Option(p.project_name,p.project_name))});if(!assigned.length)job.add(new Option('No active project assignments','',true,true))}
 async function restoreActiveFromDatabase(){
  if(!employee.value){renderActive(null);return}
  const id=employeeMap.get(employee.value);if(!id){renderActive(null);return}
