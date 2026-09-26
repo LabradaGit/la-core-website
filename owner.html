@@ -68,13 +68,21 @@ async function showApp(){
 async function loadDashboard(){
  const [emps,projects,leads]=await Promise.all([
   db.from('employees').select('id',{count:'exact',head:true}).eq('active',true),
-  db.from('projects').select('id,name,address,project_status,original_contract_amount').eq('active',true),
+  db.from('projects').select('id,name,address,project_status,original_contract_amount,active').eq('active',true),
   db.from('leads').select('id',{count:'exact',head:true}).not('status','in','("won","rejected","no_response")')
  ]);
- $('activeCrew').textContent=emps.count??'—';
- if(projects.error){$('projectRows').innerHTML='<div class="row"><small>Unable to load projects.</small></div>';return}
+ if(emps.error) console.error('employees dashboard query:',emps.error);
+ if(projects.error) console.error('projects dashboard query:',projects.error);
+ if(leads.error) console.error('leads dashboard query:',leads.error);
+ $('activeCrew').textContent=emps.error?'!':(emps.count??0);
+ $('openLeads').textContent=leads.error?'!':(leads.count??0);
+ if(projects.error){
+   $('activeProjects').textContent='!';
+   $('contractValue').textContent='!';
+   $('projectRows').innerHTML='<div class="row"><div><b>Project query failed</b><br><small>'+escapeHtml(projects.error.message||'Unknown database error')+'</small></div></div>';
+   return;
+ }
  $('activeProjects').textContent=projects.data.length;
- $('openLeads').textContent=leads.count??0;
  $('contractValue').textContent=money(projects.data.reduce((s,p)=>s+Number(p.original_contract_amount||0),0));
  $('projectRows').innerHTML=projects.data.length?projects.data.slice(0,7).map(p=>'<div class="row"><div><b>'+escapeHtml(p.name)+'</b><br><small>'+escapeHtml(p.address||'Address not entered')+'</small></div><div style="text-align:right"><b>'+money(p.original_contract_amount)+'</b><br><span class="badge">'+escapeHtml(p.project_status||'active')+'</span></div></div>').join(''):'<div class="row"><small>No active projects.</small></div>';
 }
