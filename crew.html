@@ -80,7 +80,7 @@ const ENDPOINT='https://formspree.io/f/meaoknlv';
 const SUPABASE_URL='https://cftnybwpiqmovugcbpgf.supabase.co';
 const SUPABASE_KEY='sb_publishable_-V5oytvKBz4DaqK7S42PCw_jSXepNkH';
 const db=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-let employeeMap=new Map(), projectMap=new Map(), historyPeriod='today';
+let employeeMap=new Map(), projectMap=new Map(), allProjects=[], historyPeriod='today';
 const $=id=>document.getElementById(id);
 const employee=$('employee'),job=$('job'),category=$('category'),note=$('note'),status=$('status'),statusTitle=$('statusTitle'),statusText=$('statusText'),locDot=$('locDot'),locTitle=$('locTitle'),locText=$('locText');
 const activeShift=$('activeShift'),timer=$('timer'),activeSite=$('activeSite'),activeMeta=$('activeMeta'),fields=$('fields'),actions=document.querySelector('.actions');
@@ -97,11 +97,14 @@ async function loadDatabaseOptions(){
  employee.innerHTML='<option value="">Select your name</option>'; employeeMap=new Map();
  emps.forEach(e=>{employeeMap.set(e.full_name,e.id);employee.add(new Option(e.full_name,e.full_name))});
  job.innerHTML='<option value="">Select job site</option>'; projectMap=new Map();
- projs.forEach(p=>{projectMap.set(p.name,p.id);job.add(new Option(p.name,p.name))});
+ allProjects=projs||[];projs.forEach(p=>{projectMap.set(p.name,p.id);job.add(new Option(p.name,p.name))});
  if(last&&employeeMap.has(last))employee.value=last;
+ if(employee.value)await loadAssignedProjects();
  await restoreActiveFromDatabase();
  await loadMyTime();
 }
+
+async function loadAssignedProjects(){const employeeId=employeeMap.get(employee.value);job.innerHTML='<option value="">Select job site</option>';projectMap=new Map();if(!employeeId){allProjects.forEach(p=>{projectMap.set(p.name,p.id);job.add(new Option(p.name,p.name))});return}const {data,error}=await db.from('assignments').select('project_id,projects(id,name,active)').eq('employee_id',employeeId).eq('active',true);if(error){show('Assignment lookup failed','Your assigned jobsites could not be loaded. Refresh and try again.',true);return}const assigned=(data||[]).map(a=>a.projects).filter(p=>p&&p.active!==false);assigned.forEach(p=>{projectMap.set(p.name,p.id);job.add(new Option(p.name,p.name))});if(!assigned.length)job.add(new Option('No active project assignments','',true,true))}
 async function restoreActiveFromDatabase(){
  if(!employee.value){renderActive(null);return}
  const id=employeeMap.get(employee.value);if(!id){renderActive(null);return}
@@ -174,7 +177,7 @@ async function punch(action){
 }
 document.querySelectorAll('[data-action]').forEach(b=>b.addEventListener('click',()=>punch(b.dataset.action)));
 $('activeClockOut').addEventListener('click',()=>punch('CLOCK OUT'));
-employee.addEventListener('change',()=>{restoreActiveFromDatabase().catch(e=>show('Database error',e.message,true));loadMyTime()});document.querySelectorAll('[data-period]').forEach(b=>b.addEventListener('click',()=>{historyPeriod=b.dataset.period;document.querySelectorAll('[data-period]').forEach(x=>x.classList.toggle('active',x===b));loadMyTime()}));
+employee.addEventListener('change',async()=>{try{await loadAssignedProjects();await restoreActiveFromDatabase()}catch(e){show('Database error',e.message,true)}loadMyTime()});document.querySelectorAll('[data-period]').forEach(b=>b.addEventListener('click',()=>{historyPeriod=b.dataset.period;document.querySelectorAll('[data-period]').forEach(x=>x.classList.toggle('active',x===b));loadMyTime()}));
 $('helpBtn').addEventListener('click',()=>{$('manual').classList.toggle('show');if($('manual').classList.contains('show'))$('manual').scrollIntoView({behavior:'smooth',block:'nearest'})});
 $('manualSubmit').addEventListener('click',async()=>{
  if(!validate())return;const reason=$('reason').value.trim(),requested=$('requestedTime').value;
