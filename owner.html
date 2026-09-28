@@ -123,11 +123,22 @@ const db=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
 const $=id=>document.getElementById(id);
 function money(v){return new Intl.NumberFormat('en-US',{style:'currency',currency:'USD',maximumFractionDigits:0}).format(v||0)}
 async function showApp(){
- const {data:{session}}=await db.auth.getSession();
+ const {data:{session},error:sessionError}=await db.auth.getSession();
+ if(sessionError){console.error('Owner session check failed:',sessionError);$('loginMsg').textContent='Unable to verify the signed-in session. Please try again.';$('app').classList.add('hidden');$('login').classList.remove('hidden');return}
  if(!session){$('app').classList.add('hidden');$('login').classList.remove('hidden');return}
  const {data:identity,error}=await db.rpc('owner_identity');
- if(error||!identity||!identity.length){await db.auth.signOut();$('loginMsg').textContent='This account is not authorized for Owner Portal access.';$('app').classList.add('hidden');$('login').classList.remove('hidden');return}
- const me=identity[0];$('ownerName').textContent=me.full_name;$('ownerRole').textContent=me.employee_role.toUpperCase();$('roleCheck').textContent=me.full_name+' · '+me.employee_role;
+ if(error){
+   console.error('Owner identity check failed:',error);
+   $('loginMsg').textContent='Owner authorization check failed: '+error.message;
+   $('app').classList.add('hidden');$('login').classList.remove('hidden');return
+ }
+ if(!identity||!identity.length){
+   console.error('Owner identity returned no authorized record for user:',session.user?.id);
+   await db.auth.signOut();
+   $('loginMsg').textContent='This account is not authorized for Owner Portal access.';
+   $('app').classList.add('hidden');$('login').classList.remove('hidden');return
+ }
+ const me=identity[0];$('loginMsg').textContent='';$('ownerName').textContent=me.full_name;$('ownerRole').textContent=me.employee_role.toUpperCase();$('roleCheck').textContent=me.full_name+' · '+me.employee_role;
  $('login').classList.add('hidden');$('app').classList.remove('hidden');await loadDashboard();
 }
 async function loadDashboard(){
