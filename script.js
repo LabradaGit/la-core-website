@@ -28,3 +28,25 @@ if(form){
     }
   });
 }
+const inspectionForm=document.querySelector('#inspection-form');
+if(inspectionForm){
+ const params=new URLSearchParams(location.search);
+ const requested=params.get('inspection');
+ const inspectionType=document.querySelector('#inspection-type');
+ if(requested && [...inspectionType.options].some(option=>option.value===requested))inspectionType.value=requested;
+ inspectionForm.addEventListener('submit',async e=>{
+  e.preventDefault();
+  const button=inspectionForm.querySelector('button[type="submit"]');
+  const status=document.querySelector('#inspection-form-status');
+  button.disabled=true;button.textContent='Sending...';status.textContent='Sending your inspection request...';
+  try{
+   const data=new FormData(inspectionForm);
+   const name=String(data.get('name')||'New Customer').trim();
+   const type=String(data.get('inspection_type')||'Inspection').trim();
+   data.set('_subject',`LA CORE LEAD INSPECTION — ${name} — ${type}`);
+   const response=await fetch(inspectionForm.action,{method:'POST',body:data,headers:{Accept:'application/json'}});
+   if(!response.ok)throw new Error('Submission failed');
+   inspectionForm.reset();status.textContent='Thank you! Your inspection request has been sent to LA Core. We will contact you to discuss the next steps. This is not a confirmed appointment.';button.textContent='Request Sent';
+  }catch(error){status.textContent='We could not send your request. Please call 202-699-8023 or email lacoredgroupllc@gmail.com.';button.textContent='Send Inspection Request';button.disabled=false;}
+ });
+}
