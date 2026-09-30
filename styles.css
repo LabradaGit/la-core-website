@@ -23,3 +23,6 @@
 
 /* V10 — MDE accreditation credentials */
 .lead-credentials{background:#f6f3ec}.lead-credential-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.lead-credential-grid article{padding:34px;background:#fff;border-top:3px solid var(--gold)}.lead-credential-grid h3{font-size:24px;margin:12px 0}.lead-credential-grid article>p:not(.eyebrow){font-size:16px;color:var(--muted);line-height:1.6}.lead-credential-grid strong{color:var(--navy)}.lead-credential-dates{margin:20px 0 0;font-size:13px;color:var(--muted)}@media(max-width:850px){.lead-credential-grid{grid-template-columns:1fr}}
+
+/* V11 — Accessible white labels on navy heading strips (lead portfolio only) */
+.lead-credentials .section-head > .eyebrow.dark,.lead-types .section-head > .eyebrow.dark,.lead-credential-grid article > .eyebrow.dark{display:block;width:fit-content;max-width:100%;min-width:min(100%,320px);background:var(--navy);color:#fff;font-weight:800;letter-spacing:.14em;padding:5px 10px;margin-bottom:16px;line-height:1.4}.lead-credential-grid article > .eyebrow.dark{min-width:100%}
