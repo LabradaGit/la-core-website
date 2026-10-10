@@ -73,7 +73,7 @@ begin
  if not v_temp and (c.pin_hash is null or crypt(p_pin,c.pin_hash)<>c.pin_hash) then
    update public.crew_pin_credentials set failed_attempts=failed_attempts+1,
    locked_until=case when failed_attempts+1>=5 then now()+interval '15 minutes' else null end where employee_id=p_employee_id;
-   raise exception 'Invalid credentials';
+   return jsonb_build_object('error','Invalid credentials');
  end if;
  update public.crew_pin_credentials set failed_attempts=0,locked_until=null where employee_id=p_employee_id;
  v_token:=encode(gen_random_bytes(32),'hex');
