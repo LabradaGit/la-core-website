@@ -50,7 +50,7 @@ declare v_pin text;
 begin
  if not public.is_owner_or_admin() then raise exception 'Not authorized'; end if;
  if not exists(select 1 from public.employees where id=p_employee_id and active=true) then raise exception 'Employee not active'; end if;
- v_pin:=lpad((('x'||substr(encode(gen_random_bytes(4),'hex'),1,8))::bit(32)::bigint % 1000000)::text,6,'0');
+ v_pin:=lpad((floor(random()*1000000)::int)::text,6,'0');
  insert into public.crew_pin_credentials(employee_id,temporary_hash,temporary_expires_at,failed_attempts,locked_until)
  values(p_employee_id,crypt(v_pin,gen_salt('bf')),now()+interval '24 hours',0,null)
  on conflict(employee_id) do update set temporary_hash=excluded.temporary_hash,
@@ -87,7 +87,7 @@ returns boolean language plpgsql security definer set search_path=public
 as $$
 declare v_employee uuid;
 begin
- if p_new_pin !~ '^[0-9]{6}
+ if p_new_pin !~ '^[0-9]{6}$' then raise exception 'PIN must be 6 digits'; end if;
  select employee_id into v_employee from public.crew_earnings_sessions
  where token_hash=encode(digest(p_token,'sha256'),'hex') and expires_at>now();
  if v_employee is null then raise exception 'Session expired'; end if;
@@ -165,62 +165,4 @@ end $$;
 revoke all on function public.owner_issue_crew_temp_pin(uuid) from public, anon, authenticated;
 grant execute on function public.owner_issue_crew_temp_pin(uuid) to authenticated;
 revoke all on function public.crew_pin_login(uuid,text),public.crew_set_private_pin(text,text),public.crew_private_earnings(text) from public, anon, authenticated;
-grant execute on function public.crew_pin_login(uuid,text),public.crew_set_private_pin(text,text),public.crew_private_earnings(text) to anon,authenticated;
- then raise exception 'PIN must be 6 digits'; end if;
- select employee_id into v_employee from public.crew_earnings_sessions
- where token_hash=encode(digest(p_token,'sha256'),'hex') and expires_at>now();
- if v_employee is null then raise exception 'Session expired'; end if;
- update public.crew_pin_credentials set pin_hash=crypt(p_new_pin,gen_salt('bf')),
- temporary_hash=null,temporary_expires_at=null,updated_at=now() where employee_id=v_employee;
- delete from public.crew_earnings_sessions where employee_id=v_employee
- and token_hash<>encode(digest(p_token,'sha256'),'hex');
- return true;
-end $$;
-
--- Private project-by-project view. Never expose raw compensation tables to anonymous crew clients.
-create or replace function public.crew_private_earnings(p_token text)
-returns jsonb language plpgsql security definer set search_path=public
-as $$
-declare v_employee uuid; v_result jsonb;
-begin
- select employee_id into v_employee from public.crew_earnings_sessions
- where token_hash=encode(digest(p_token,'sha256'),'hex') and expires_at>now();
- if v_employee is null then raise exception 'Session expired'; end if;
- if exists(select 1 from public.crew_pin_credentials where employee_id=v_employee and temporary_hash is not null) then
- raise exception 'Set a private PIN before viewing earnings'; end if;
- with a as (
- select id,project_id,compensation_type,hourly_rate,daily_rate,contract_amount
- from public.assignments where employee_id=v_employee
- ), calc as (
- select a.id,a.project_id,a.compensation_type,
- coalesce(sum(extract(epoch from (t.clock_out-t.clock_in))/3600),0) as hours,
- count(distinct (t.clock_in at time zone 'America/New_York')::date) as days,
- case when a.compensation_type='hourly' then coalesce(sum(extract(epoch from (t.clock_out-t.clock_in))/3600),0)*coalesce(a.hourly_rate,0)
- when a.compensation_type='daily' then count(distinct (t.clock_in at time zone 'America/New_York')::date)*coalesce(a.daily_rate,0)
- else 0 end as earned
- from a left join public.time_punches t on t.employee_id=v_employee and t.project_id=a.project_id
- and t.clock_out is not null and (t.assignment_id=a.id or t.assignment_id is null)
- group by a.id,a.project_id,a.compensation_type,a.hourly_rate,a.daily_rate
- )
- select coalesce(jsonb_agg(jsonb_build_object(
- 'project_id',calc.project_id,'project',p.name,'compensation_type',calc.compensation_type,
- 'hours',round(calc.hours::numeric,2),'days',calc.days,'estimated_earned',round(calc.earned::numeric,2),
- 'paid',coalesce(pay.paid,0),'estimated_balance',round(calc.earned::numeric-coalesce(pay.paid,0),2),
- 'last_payment',pay.last_payment,'payments',coalesce(pay.payment_list,'[]'::jsonb)
- )), '[]'::jsonb) into v_result
- from calc join public.projects p on p.id=calc.project_id
- left join lateral (
- select sum(cp.amount) paid,
- (array_agg(jsonb_build_object('date',cp.payment_date,'amount',cp.amount,'method',cp.payment_method,'reference',cp.reference)
- order by cp.payment_date desc,cp.created_at desc))[1] last_payment,
- jsonb_agg(jsonb_build_object('date',cp.payment_date,'amount',cp.amount,'method',cp.payment_method,'reference',cp.reference)
- order by cp.payment_date desc,cp.created_at desc) payment_list
- from public.crew_payments cp where cp.employee_id=v_employee and cp.project_id=calc.project_id
- ) pay on true;
- return v_result;
-end $$;
-
-revoke all on function public.owner_issue_crew_temp_pin(uuid) from public;
-grant execute on function public.owner_issue_crew_temp_pin(uuid) to authenticated;
-revoke all on function public.crew_pin_login(uuid,text),public.crew_set_private_pin(text,text),public.crew_private_earnings(text) from public;
 grant execute on function public.crew_pin_login(uuid,text),public.crew_set_private_pin(text,text),public.crew_private_earnings(text) to anon,authenticated;
