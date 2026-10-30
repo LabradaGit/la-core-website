@@ -60,22 +60,22 @@ $('fillBrief').onclick=()=>{try{const values=parseProjectBrief($('quickBrief').v
 function parseNaturalRequest(raw){
  const text=raw.trim();if(!text)throw Error('Tell me what project to create first.');
  const result={},notes=[];
- const money=text.match(/(?:\\$\\s*([\\d,]+(?:\\.\\d{1,2})?)|(?:contract|budget|price|amount)\\s*(?:is|of|for|:)?\\s*([\\d,]+(?:\\.\\d{1,2})?))/i);
+ const money=text.match(/(?:\$\s*([\d,]+(?:\.\d{1,2})?)|(?:contract|budget|price|amount)\s*(?:is|of|for|:)?\s*([\d,]+(?:\.\d{1,2})?))/i);
  if(money)result.newAmount=(money[1]||money[2]).replaceAll(',','');
- const address=text.match(/\\b(?:at|located at|address(?: is|:)?|for the property at)\\s+(\\d+\\s+[^,.]+?)(?=\\s+(?:for\\s+\\$|with\\s+a|starting|start(?:ing)?\\s+on|scheduled|status|contract|budget|and\\s+the|\\$)|[,.]|$)/i);
+ const address=text.match(/\b(?:at|located at|address(?: is|:)?|for the property at)\s+(\d+\s+[^,.]+?)(?=\s+(?:for\s+\$|with\s+a|starting|start(?:ing)?\s+on|scheduled|status|contract|budget|and\s+the|\$)|[,.]|$)/i);
  if(address)result.newAddress=address[1].trim();
- const status=text.match(/\\b(on hold|scheduled|active|completed|cancelled|lead)\\b/i);
+ const status=text.match(/\b(on hold|scheduled|active|completed|cancelled|lead)\b/i);
  if(status)result.newStatus=status[1].toLowerCase().replace(' ','_');
- const date=text.match(/\\b(?:starting|start(?:ing)?\\s+on|start date(?: is|:)?|begins?\\s+on)\\s+(\\d{4}-\\d{2}-\\d{2})\\b/i);
+ const date=text.match(/\b(?:starting|start(?:ing)?\s+on|start date(?: is|:)?|begins?\s+on)\s+(\d{4}-\d{2}-\d{2})\b/i);
  if(date)result.newStart=date[1];
- const name=text.match(/(?:create|add|start|open|set up)\\s+(?:a|an|new|the|project\\s+for|project\\s+called|project\\s+named|a new)\\s+(.+?)(?=\\s+(?:at|located at|for\\s+\\$|with\\s+a|starting|scheduled|status|contract|budget)|[,.]|$)/i);
- if(name)result.newName=name[1].trim().replace(/\\s+project$/i,' project');
+ const name=text.match(/(?:create|add|start|open|set up)\s+(?:a|an|new|the|project\s+for|project\s+called|project\s+named|a new)\s+(.+?)(?=\s+(?:at|located at|for\s+\$|with\s+a|starting|scheduled|status|contract|budget)|[,.]|$)/i);
+ if(name)result.newName=name[1].trim().replace(/\s+project$/i,' project');
  if(!result.newName&&result.newAddress)result.newName='Project - '+result.newAddress;
  if(!result.newName)throw Error('I could not identify the project name. Try: Create a kitchen renovation project at 123 Main St for $4,000.');
  if(!money)notes.push('Contract amount not detected; please enter it below.');
  if(!address)notes.push('Address not detected; please enter it if needed.');
- if(/\\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week)\\b/i.test(text))notes.push('Relative dates need manual confirmation in the date field.');
- if(/\\b(assign|crew|employee|worker|ronald|guillermo|andres)\\b/i.test(text))notes.push('Crew assignments are not supported by project creation yet; no one has been assigned.');
+ if(/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|tomorrow|next week)\b/i.test(text))notes.push('Relative dates need manual confirmation in the date field.');
+ if(/\b(assign|crew|employee|worker|ronald|guillermo|andres)\b/i.test(text))notes.push('Crew assignments are not supported by project creation yet; no one has been assigned.');
  if(!result.newStart)notes.push('Start date not detected; enter it if known (YYYY-MM-DD).');
  return {result,notes};
 }
