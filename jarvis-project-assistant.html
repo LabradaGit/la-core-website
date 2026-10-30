@@ -21,10 +21,10 @@
 <button id="previewNew">Review new project</button>
 <div id="newReview" hidden><h3>Review before creating</h3><div id="newSummary" class="row"></div><button id="confirmNew">Approve and create project</button><button id="cancelNew" style="background:#456078;color:white">Cancel</button></div>
 </section>
-<section><h2>1. Prepare project update</h2><label for="project">Project</label><select id="project"></select>
+<section><h2>1. Update an existing project</h2><p class="muted">Tell Jarvis what changed. This version recognizes contract amounts, statuses, and ISO dates. Review every field before approval.</p><label for="updateRequest">Describe the change</label><textarea id="updateRequest" placeholder="Change the contract amount to $2,400 and mark the project completed."></textarea><button id="interpretUpdate">Prepare update from message</button><p id="updateFeedback" class="muted" role="status"></p><details><summary>Advanced: edit individual project fields</summary><label for="project">Project</label><select id="project"></select>
 <label for="instruction">Your instruction / reason</label><textarea id="instruction" placeholder="Example: Update Lombard St completion date and project notes."></textarea>
 <p class="muted">Check ONLY the fields you want to change. Leave every other checkbox unchecked. Enter your reason above; it is not automatically copied into project notes.</p>
-<div id="fields"></div><button id="preview">Preview changes</button></section>
+<div id="fields"></div></details><button id="preview">Preview changes</button></section>
 <section id="previewSection" hidden><h2>2. Review proposed changes</h2><div id="previewRows"></div><button id="stage">Save draft for approval</button><button id="cancelPreview">Cancel preview</button></section>
 <section><h2>3. Pending approvals</h2><button id="refresh">Refresh proposals</button><div id="proposals"></div></section>
 <section><h2>4. Project change history</h2><p class="muted">Every recorded project update is shown here. Restore only one field at a time; newer edits cannot be overwritten accidentally.</p><button id="loadHistory">Load selected project history</button><div id="history"></div></section>
@@ -131,6 +131,35 @@ else{input=document.createElement('input');input.type=k==='original_contract_amo
 input.id='value_'+k;input.value=p[k]??'';input.disabled=true;cb.onchange=()=>{input.disabled=!cb.checked};wrapper.append(input);return wrapper}
 function selectedProject(){return projects.find(p=>p.id===$('project').value)}
 function renderFields(){const p=selectedProject();$('fields').replaceChildren();$('previewSection').hidden=true;if(!p)return;Object.keys(columns).forEach(k=>$('fields').append(fieldInput(k,p)))}
+function parseUpdateRequest(raw){
+ const text=raw.trim();if(!text)throw Error('Describe what changed first.');
+ const changes={};
+ const amount=text.match(/(?:contract(?: amount| price)?|price|budget|amount)\\s*(?:to|is|at|:|of|from[^.]*?to)\\s*\\$?\\s*([\\d,]+(?:\\.\\d{1,2})?)/i);
+ if(amount)changes.original_contract_amount=Number(amount[1].replaceAll(',',''));
+ const status=text.match(/\\b(?:mark|set|change|move|update)(?:\\s+(?:the|project|status|project status|it|as|to)){0,4}\\s+(?:as\\s+|to\\s+)?(lead|scheduled|active|on hold|completed|cancelled)\\b/i);
+ if(status)changes.project_status=status[1].toLowerCase().replace(' ','_');
+ const start=text.match(/\\b(?:start date|starting|starts? on)\\s*(?:to|is|on|:)?\\s*(\\d{4}-\\d{2}-\\d{2})/i);
+ if(start)changes.start_date=start[1];
+ const target=text.match(/\\b(?:target completion|completion date|due date)\\s*(?:to|is|on|:)?\\s*(\\d{4}-\\d{2}-\\d{2})/i);
+ if(target)changes.target_completion_date=target[1];
+ if(!Object.keys(changes).length)throw Error('I could not safely identify a supported change. Try: Change the contract amount to $2,400.');
+ return changes;
+}
+$('interpretUpdate').onclick=()=>{
+ try{
+  const changes=parseUpdateRequest($('updateRequest').value);
+  if(!selectedProject())throw Error('Select a project first.');
+  renderFields();
+  for(const [field,value] of Object.entries(changes)){
+   $('change_'+field).checked=true;
+   $('value_'+field).disabled=false;
+   $('value_'+field).value=value;
+  }
+  $('instruction').value=$('updateRequest').value.trim();
+  $('updateFeedback').textContent='Recognized: '+Object.keys(changes).map(k=>columns[k]).join(', ')+'. Other details in your message may not have been interpreted. Review the preview carefully.';
+  $('preview').click();
+ }catch(e){$('updateFeedback').textContent=e.message;msg(e.message,true)}
+};
 function buildChanges(){const p=selectedProject();if(!p)throw Error('Select a project');const changes=[];for(const k of Object.keys(columns)){if(!$('change_'+k).checked)continue;const old=p[k]??null;const next=normalize(k,$('value_'+k).value);if(JSON.stringify(old)!==JSON.stringify(next))changes.push({field:k,old,new:next})}if(!changes.length)throw Error('Select at least one changed value');return changes}
 function renderChanges(container,changes){container.replaceChildren();for(const c of changes){const row=node('div');row.className='row';row.append(node('strong',columns[c.field]||c.field));row.append(node('p','Before: '+display(c.old)));row.append(node('p','After: '+display(c.new)));container.append(row)}}
 async function refresh(){const {data,error}=await db.from('jarvis_project_proposals').select('id,project_id,instruction,changes,status,created_at').order('created_at',{ascending:false}).limit(100);if(error)throw error;$('proposals').replaceChildren();for(const p of data){const section=node('div');section.className='row';section.append(node('h3',(projects.find(x=>x.id===p.project_id)?.name||'Project')+' — '+p.status));section.append(node('p',p.instruction));section.append(node('small',new Date(p.created_at).toLocaleString()));renderChanges(section.appendChild(node('div')),p.changes);if(p.status==='draft'){const approve=node('button','Approve and apply');approve.onclick=async()=>{if(!confirm('Apply these changes to the live project?'))return;approve.disabled=true;const {error}=await db.rpc('jarvis_apply_project_proposal',{p_id:p.id});if(error){msg(error.message.includes('changed since proposal creation')?'This draft is outdated: '+error.message+'. Reject this draft, reload the page, and create a fresh proposal with only the intended fields checked.':error.message,true);window.scrollTo({top:0,behavior:'smooth'});approve.disabled=false;return}msg('Approved and applied.');await loadProjects();await refresh()};section.append(approve);const reject=node('button','Reject proposal');reject.style.background='#456078';reject.style.color='white';reject.onclick=async()=>{if(!confirm('Reject this proposal? No project data will be changed.'))return;reject.disabled=true;approve.disabled=true;const {error}=await db.rpc('jarvis_reject_project_proposal',{p_id:p.id});if(error){msg(error.message,true);reject.disabled=false;approve.disabled=false;return}msg('Proposal rejected. No project fields changed.');await refresh()};section.append(reject)}$('proposals').append(section)}if(!data.length)$('proposals').append(node('p','No proposals yet.'))}
