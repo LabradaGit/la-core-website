@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Jarvis Project Assistant | LA Core</title><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+:root{color-scheme:dark;font-family:system-ui,Arial;background:#071827;color:#f6f8fb}*{box-sizing:border-box}body{margin:0;padding:24px;max-width:1000px;margin-inline:auto}h1{color:#f4c542}a{color:#f4c542}section{background:#102b3e;border:1px solid #254257;border-radius:14px;padding:20px;margin:16px 0}label{display:block;margin:14px 0 6px}input,select,textarea,button{font:inherit}input,select,textarea{width:100%;padding:12px;border:1px solid #456078;border-radius:8px;background:#071827;color:white}textarea{min-height:110px}button{padding:11px 16px;border:0;border-radius:9px;background:#f4c542;color:#071827;font-weight:700;cursor:pointer;margin:8px 6px 8px 0}button:disabled{opacity:.5;cursor:not-allowed}.muted{color:#b7c8d6}.error{color:#ff8888}.row{padding:12px 0;border-bottom:1px solid #254257}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:650px){.grid{grid-template-columns:1fr}}pre{white-space:pre-wrap;overflow-wrap:anywhere}code{color:#f4c542}
+</style></head><body>
+<a href="owner.html">← Owner Dashboard</a><h1>Jarvis Project Assistant</h1><p class="muted">Approval-first project updates. Nothing changes in a project until you explicitly approve a proposal.</p>
+<p id="message" role="status">Checking owner access…</p>
+<main id="workspace" hidden>
+<section><h2>1. Prepare project update</h2><label for="project">Project</label><select id="project"></select>
+<label for="instruction">Your instruction / reason</label><textarea id="instruction" placeholder="Example: Update Lombard St completion date and project notes."></textarea>
+<p class="muted">Select fields below. Values are compared with the current project record; changes are staged, not saved to the project.</p>
+<div id="fields"></div><button id="preview">Preview changes</button></section>
+<section id="previewSection" hidden><h2>2. Review proposed changes</h2><div id="previewRows"></div><button id="stage">Save draft for approval</button><button id="cancelPreview">Cancel preview</button></section>
+<section><h2>3. Pending approvals</h2><button id="refresh">Refresh proposals</button><div id="proposals"></div></section>
+</main>
+<script>
+'use strict';
+const db=supabase.createClient('https://cftnybwpiqmovugcbpgf.supabase.co','sb_publishable_-V5oytvKBz4DaqK7S42PCw_jSXepNkH');
+const $=id=>document.getElementById(id);
+const columns={name:'Project name',address:'Address',project_status:'Status',original_contract_amount:'Contract amount',start_date:'Start date',target_completion_date:'Target completion',project_description:'Description',owner_notes:'Owner notes'};
+const statuses=['lead','scheduled','active','on_hold','completed','cancelled'];
+let projects=[],pending=[];
+function msg(s,error=false){$('message').textContent=s;$('message').className=error?'error':'muted'}
+function node(tag,txt){const el=document.createElement(tag);el.textContent=txt??'';return el}
+function display(v){return v===null||v===undefined?'(empty)':String(v)}
+function normalize(k,v){if(k==='original_contract_amount'){if(v===''||v===null)return null;const n=Number(v);if(!Number.isFinite(n)||n<0)throw Error('Invalid contract amount');return n}return v===''?null:v}
+function fieldInput(k,p){const wrapper=node('div');wrapper.className='row';const cb=document.createElement('input');cb.type='checkbox';cb.style.width='auto';cb.id='change_'+k;wrapper.append(cb);const label=node('label',columns[k]+' (current: '+display(p[k])+')');label.htmlFor=cb.id;label.style.display='inline';label.style.marginLeft='10px';wrapper.append(label);let input;
+if(k==='project_status'){input=document.createElement('select');statuses.forEach(s=>{const o=node('option',s);o.value=s;input.append(o)})}
+else if(k==='project_description'||k==='owner_notes'){input=document.createElement('textarea')}
+else{input=document.createElement('input');input.type=k==='original_contract_amount'?'number':k.endsWith('_date')?'date':'text';if(k==='original_contract_amount'){input.min='0';input.step='0.01'}}
+input.id='value_'+k;input.value=p[k]??'';input.disabled=true;cb.onchange=()=>{input.disabled=!cb.checked};wrapper.append(input);return wrapper}
+function selectedProject(){return projects.find(p=>p.id===$('project').value)}
+function renderFields(){const p=selectedProject();$('fields').replaceChildren();$('previewSection').hidden=true;if(!p)return;Object.keys(columns).forEach(k=>$('fields').append(fieldInput(k,p)))}
+function buildChanges(){const p=selectedProject();if(!p)throw Error('Select a project');const changes=[];for(const k of Object.keys(columns)){if(!$('change_'+k).checked)continue;const old=p[k]??null;const next=normalize(k,$('value_'+k).value);if(JSON.stringify(old)!==JSON.stringify(next))changes.push({field:k,old,new:next})}if(!changes.length)throw Error('Select at least one changed value');return changes}
+function renderChanges(container,changes){container.replaceChildren();for(const c of changes){const row=node('div');row.className='row';row.append(node('strong',columns[c.field]||c.field));row.append(node('p','Before: '+display(c.old)));row.append(node('p','After: '+display(c.new)));container.append(row)}}
+async function refresh(){const {data,error}=await db.from('jarvis_project_proposals').select('id,project_id,instruction,changes,status,created_at').order('created_at',{ascending:false}).limit(100);if(error)throw error;$('proposals').replaceChildren();for(const p of data){const section=node('div');section.className='row';section.append(node('h3',(projects.find(x=>x.id===p.project_id)?.name||'Project')+' — '+p.status));section.append(node('p',p.instruction));section.append(node('small',new Date(p.created_at).toLocaleString()));renderChanges(section.appendChild(node('div')),p.changes);if(p.status==='draft'){const approve=node('button','Approve and apply');approve.onclick=async()=>{if(!confirm('Apply these changes to the live project?'))return;approve.disabled=true;const {error}=await db.rpc('jarvis_apply_project_proposal',{p_id:p.id});if(error){msg(error.message,true);approve.disabled=false;return}msg('Approved and applied.');await loadProjects();await refresh()};section.append(approve);const reject=node('button','Reject proposal');reject.style.background='#456078';reject.style.color='white';reject.onclick=async()=>{if(!confirm('Reject this proposal? No project data will be changed.'))return;reject.disabled=true;approve.disabled=true;const {error}=await db.rpc('jarvis_reject_project_proposal',{p_id:p.id});if(error){msg(error.message,true);reject.disabled=false;approve.disabled=false;return}msg('Proposal rejected. No project fields changed.');await refresh()};section.append(reject)}$('proposals').append(section)}if(!data.length)$('proposals').append(node('p','No proposals yet.'))}
+async function loadProjects(){const {data,error}=await db.from('projects').select('id,name,address,project_status,original_contract_amount,start_date,target_completion_date,project_description,owner_notes').order('name');if(error)throw error;projects=data||[];const current=$('project').value;$('project').replaceChildren();for(const p of projects){const o=node('option',p.name);o.value=p.id;$('project').append(o)}if(projects.some(p=>p.id===current))$('project').value=current;renderFields()}
+$('project').onchange=renderFields;
+$('preview').onclick=()=>{try{pending=buildChanges();renderChanges($('previewRows'),pending);$('previewSection').hidden=false;msg('Review the proposed values below.')}catch(e){msg(e.message,true)}};
+$('cancelPreview').onclick=()=>{$('previewSection').hidden=true;pending=[]};
+$('stage').onclick=async()=>{try{const instruction=$('instruction').value.trim();if(!instruction)throw Error('Add an instruction/reason');const changes=buildChanges();if(JSON.stringify(changes)!==JSON.stringify(pending))throw Error('Fields changed since preview; preview again');const {data:{user}}=await db.auth.getUser();if(!user)throw Error('Sign in required');const {error}=await db.from('jarvis_project_proposals').insert({project_id:$('project').value,requested_by:user.id,instruction,changes});if(error)throw error;pending=[];$('previewSection').hidden=true;msg('Draft staged. No project fields changed.');await refresh()}catch(e){msg(e.message,true)}};
+$('refresh').onclick=async()=>{try{await refresh();msg('Proposals refreshed.')}catch(e){msg(e.message,true)}};
+(async()=>{try{const {data:{user},error}=await db.auth.getUser();if(error||!user)throw Error('Please sign in through the Owner Dashboard first.');const identity=await db.rpc('owner_identity');if(identity.error||!identity.data?.length)throw Error('Owner/admin access required.');$('workspace').hidden=false;await loadProjects();await refresh();msg('Owner access confirmed. Draft changes require approval.')}catch(e){msg(e.message,true)}})();
+</script></body></html>
