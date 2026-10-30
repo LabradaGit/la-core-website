@@ -29,6 +29,7 @@ begin
      after_value #>> '{}' not in ('lead','scheduled','active','on_hold','completed','cancelled')) then
       raise exception 'Invalid project status';
    end if;
+   if k = 'name' and (after_value = 'null'::jsonb or btrim(after_value #>> '{}') = '') then raise exception 'Project name is required'; end if;
    if k = 'original_contract_amount' and after_value <> 'null'::jsonb and
       (jsonb_typeof(after_value) <> 'number' or (after_value #>> '{}')::numeric < 0) then
       raise exception 'Invalid contract amount';
@@ -43,6 +44,7 @@ begin
   project_description=case when updates ? 'project_description' then updates->>'project_description' else project_description end,
   owner_notes=case when updates ? 'owner_notes' then updates->>'owner_notes' else owner_notes end,
   project_status=coalesce((updates->>'project_status'),project_status),
+  active=case when updates ? 'project_status' then (updates->>'project_status') in ('scheduled','active','on_hold') else active end,
   start_date=case when updates ? 'start_date' then (updates->>'start_date')::date else start_date end,
   target_completion_date=case when updates ? 'target_completion_date' then (updates->>'target_completion_date')::date else target_completion_date end,
   original_contract_amount=case when updates ? 'original_contract_amount' then (updates->>'original_contract_amount')::numeric else original_contract_amount end
