@@ -7,6 +7,7 @@
 <a href="owner.html">← Owner Dashboard</a><h1>Jarvis Project Assistant</h1><p class="muted">Approval-first project updates. Nothing changes in a project until you explicitly approve a proposal.</p>
 <p id="message" role="status">Checking owner access…</p>
 <main id="workspace" hidden>
+<section><h2>Jarvis quick entry</h2><p class="muted">Paste a project brief prepared in ChatGPT. Review the extracted details in the form below before creating anything.</p><label for="quickBrief">Project brief</label><textarea id="quickBrief" placeholder="Project: Kitchen renovation&#10;Address: 123 Main St&#10;Contract amount: $4,500&#10;Status: scheduled&#10;Start date: 2026-11-02&#10;Description: Replace cabinets and paint walls"></textarea><button id="fillBrief">Fill project form from brief</button><p class="muted">Supported labels: Project, Address, Contract amount, Status, Start date, Target completion, Description, Owner notes. Use YYYY-MM-DD for dates. Nothing is saved until you approve.</p></section>
 <section><h2>Create a new project</h2><p class="muted">Enter project details, review the preview, then explicitly confirm creation. The new project is recorded in project history.</p>
 <label for="newName">Project name *</label><input id="newName" maxlength="200" placeholder="e.g. 123 Main Street renovation">
 <label for="newAddress">Address</label><input id="newAddress" placeholder="Property address">
@@ -35,6 +36,26 @@ const columns={name:'Project name',address:'Address',project_status:'Status',ori
 const statuses=['lead','scheduled','active','on_hold','completed','cancelled'];
 let projects=[],pending=[];
 let newProjectDraft=null;
+function parseProjectBrief(raw){
+ const aliases={project:'newName','project name':'newName',name:'newName',address:'newAddress',status:'newStatus','contract amount':'newAmount',contract:'newAmount',amount:'newAmount','start date':'newStart','target completion':'newTarget','completion date':'newTarget',description:'newDescription','scope of work':'newDescription','owner notes':'newNotes',notes:'newNotes'};
+ const out={},unknown=[];let last=null;
+ for(const line of raw.split(/\\r?\\n/)){
+  const match=line.match(/^\\s*([^:]{2,45}):\\s*(.*)$/);
+  if(match){const label=match[1].trim().toLowerCase();const id=aliases[label];if(id){out[id]=match[2].trim();last=id}else{unknown.push(label);last=null}}
+  else if(line.trim()&&last&&(last==='newDescription'||last==='newNotes'))out[last]+='\\n'+line.trim();
+  else if(line.trim())unknown.push(line.trim().slice(0,60));
+ }
+ if(!out.newName)throw Error('Include a Project: line with a project name.');
+ if(out.newAmount!==undefined){const n=out.newAmount.replace(/[$,\\s]/g,'');if(!/^\\d+(?:\\.\\d{1,2})?$/.test(n))throw Error('Contract amount must be a nonnegative number.');out.newAmount=n}
+ if(out.newStatus){out.newStatus=out.newStatus.toLowerCase().replace(/[ -]/g,'_');if(!statuses.includes(out.newStatus))throw Error('Unknown status: '+out.newStatus)}
+ for(const id of ['newStart','newTarget'])if(out[id]&&!/^\\d{4}-\\d{2}-\\d{2}$/.test(out[id]))throw Error('Use YYYY-MM-DD for '+id);
+ if(unknown.length)throw Error('Unrecognized brief lines: '+unknown.slice(0,3).join('; ')+'. Remove or label them so no details are silently lost.');
+ return out;
+}
+$('fillBrief').onclick=()=>{try{const values=parseProjectBrief($('quickBrief').value);for(const [id,v]of Object.entries(values))$(id).value=v;
+ $('newReview').hidden=true;newProjectDraft=null;msg('Brief loaded into the new project form. Review all fields, then click Review new project.');
+ $('newName').scrollIntoView({behavior:'smooth',block:'center'})}catch(e){msg(e.message,true);window.scrollTo({top:0,behavior:'smooth'})}};
+
 function newProjectPayload(){
  const name=$('newName').value.trim(),amount=Number($('newAmount').value);
  if(name.length<2)throw Error('Enter a project name with at least 2 characters');
