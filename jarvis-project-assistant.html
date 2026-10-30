@@ -134,13 +134,13 @@ function renderFields(){const p=selectedProject();$('fields').replaceChildren();
 function parseUpdateRequest(raw){
  const text=raw.trim();if(!text)throw Error('Describe what changed first.');
  const changes={};
- const amount=text.match(/(?:contract(?: amount| price)?|price|budget|amount)\\s*(?:to|is|at|:|of|from[^.]*?to)\\s*\\$?\\s*([\\d,]+(?:\\.\\d{1,2})?)/i);
+ const amount=text.match(/(?:contract(?: amount| price)?|price|budget|amount)\s*(?:to|is|at|:|of|from[^.]*?to)\s*\$?\s*([\d,]+(?:\.\d{1,2})?)/i);
  if(amount)changes.original_contract_amount=Number(amount[1].replaceAll(',',''));
- const status=text.match(/\\b(?:mark|set|change|move|update)(?:\\s+(?:the|project|status|project status|it|as|to)){0,4}\\s+(?:as\\s+|to\\s+)?(lead|scheduled|active|on hold|completed|cancelled)\\b/i);
+ const status=text.match(/\b(?:mark|set|change|move|update)(?:\s+(?:the|project|status|project status|it|as|to)){0,4}\s+(?:as\s+|to\s+)?(lead|scheduled|active|on hold|completed|cancelled)\b/i);
  if(status)changes.project_status=status[1].toLowerCase().replace(' ','_');
- const start=text.match(/\\b(?:start date|starting|starts? on)\\s*(?:to|is|on|:)?\\s*(\\d{4}-\\d{2}-\\d{2})/i);
+ const start=text.match(/\b(?:start date|starting|starts? on)\s*(?:to|is|on|:)?\s*(\d{4}-\d{2}-\d{2})/i);
  if(start)changes.start_date=start[1];
- const target=text.match(/\\b(?:target completion|completion date|due date)\\s*(?:to|is|on|:)?\\s*(\\d{4}-\\d{2}-\\d{2})/i);
+ const target=text.match(/\b(?:target completion|completion date|due date)\s*(?:to|is|on|:)?\s*(\d{4}-\d{2}-\d{2})/i);
  if(target)changes.target_completion_date=target[1];
  if(!Object.keys(changes).length)throw Error('I could not safely identify a supported change. Try: Change the contract amount to $2,400.');
  return changes;
