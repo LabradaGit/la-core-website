@@ -7,6 +7,18 @@
 <a href="owner.html">← Owner Dashboard</a><h1>Jarvis Project Assistant</h1><p class="muted">Approval-first project updates. Nothing changes in a project until you explicitly approve a proposal.</p>
 <p id="message" role="status">Checking owner access…</p>
 <main id="workspace" hidden>
+<section><h2>Create a new project</h2><p class="muted">Enter project details, review the preview, then explicitly confirm creation. The new project is recorded in project history.</p>
+<label for="newName">Project name *</label><input id="newName" maxlength="200" placeholder="e.g. 123 Main Street renovation">
+<label for="newAddress">Address</label><input id="newAddress" placeholder="Property address">
+<label for="newStatus">Status</label><select id="newStatus"><option value="lead">Lead</option><option value="scheduled">Scheduled</option><option value="active">Active</option><option value="on_hold">On hold</option><option value="completed">Completed</option><option value="cancelled">Cancelled</option></select>
+<label for="newAmount">Contract amount ($)</label><input id="newAmount" type="number" min="0" step="0.01" value="0">
+<label for="newStart">Start date</label><input id="newStart" type="date">
+<label for="newTarget">Target completion</label><input id="newTarget" type="date">
+<label for="newDescription">Description</label><textarea id="newDescription"></textarea>
+<label for="newNotes">Owner notes</label><textarea id="newNotes"></textarea>
+<button id="previewNew">Review new project</button>
+<div id="newReview" hidden><h3>Review before creating</h3><div id="newSummary" class="row"></div><button id="confirmNew">Approve and create project</button><button id="cancelNew" style="background:#456078;color:white">Cancel</button></div>
+</section>
 <section><h2>1. Prepare project update</h2><label for="project">Project</label><select id="project"></select>
 <label for="instruction">Your instruction / reason</label><textarea id="instruction" placeholder="Example: Update Lombard St completion date and project notes."></textarea>
 <p class="muted">Check ONLY the fields you want to change. Leave every other checkbox unchecked. Enter your reason above; it is not automatically copied into project notes.</p>
@@ -22,6 +34,34 @@ const $=id=>document.getElementById(id);
 const columns={name:'Project name',address:'Address',project_status:'Status',original_contract_amount:'Contract amount',start_date:'Start date',target_completion_date:'Target completion',project_description:'Description',owner_notes:'Owner notes'};
 const statuses=['lead','scheduled','active','on_hold','completed','cancelled'];
 let projects=[],pending=[];
+let newProjectDraft=null;
+function newProjectPayload(){
+ const name=$('newName').value.trim(),amount=Number($('newAmount').value);
+ if(name.length<2)throw Error('Enter a project name with at least 2 characters');
+ if(!$('newAmount').value||!Number.isFinite(amount)||amount<0)throw Error('Enter a valid contract amount');
+ if($('newStart').value&&$('newTarget').value&&$('newTarget').value<$('newStart').value)throw Error('Target completion cannot precede start date');
+ return {p_name:name,p_address:$('newAddress').value.trim()||null,p_status:$('newStatus').value,
+ p_amount:amount,p_start_date:$('newStart').value||null,p_target_date:$('newTarget').value||null,
+ p_description:$('newDescription').value.trim()||null,p_owner_notes:$('newNotes').value.trim()||null};
+}
+$('previewNew').onclick=()=>{try{newProjectDraft=newProjectPayload();const s=$('newSummary');s.replaceChildren();
+ for(const [key,value] of Object.entries(newProjectDraft)){const p=node('p',key.replace('p_','').replaceAll('_',' ')+': '+display(value));s.append(p)}
+ $('newReview').hidden=false;$('newReview').scrollIntoView({behavior:'smooth',block:'start'});msg('Review the new project before approving creation.')}catch(e){msg(e.message,true);window.scrollTo({top:0,behavior:'smooth'})}};
+$('cancelNew').onclick=()=>{$('newReview').hidden=true;newProjectDraft=null};
+$('confirmNew').onclick=async()=>{try{
+ if(!newProjectDraft)throw Error('Review project first');
+ if(JSON.stringify(newProjectPayload())!==JSON.stringify(newProjectDraft))throw Error('Details changed since preview. Review again.');
+ if(!confirm('Create this new project in the live Owner Dashboard?'))return;
+ $('confirmNew').disabled=true;
+ const {data,error}=await db.rpc('jarvis_create_project',newProjectDraft);
+ if(error)throw error;
+ $('newReview').hidden=true;newProjectDraft=null;
+ for(const id of ['newName','newAddress','newStart','newTarget','newDescription','newNotes'])$(id).value='';
+ $('newAmount').value='0';$('newStatus').value='lead';
+ await loadProjects();$('project').value=data;renderFields();$('history').replaceChildren();
+ msg('New project created successfully. It is now available in the project selector.');
+ }catch(e){msg(e.message,true);window.scrollTo({top:0,behavior:'smooth'})}finally{$('confirmNew').disabled=false}};
+
 function msg(s,error=false){$('message').textContent=s;$('message').className=error?'error':'muted'}
 function node(tag,txt){const el=document.createElement(tag);el.textContent=txt??'';return el}
 function display(v){return v===null||v===undefined?'(empty)':String(v)}
