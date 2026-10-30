@@ -7,7 +7,7 @@
 <a href="owner.html">← Owner Dashboard</a><h1>Jarvis Project Assistant</h1><p class="muted">Approval-first project updates. Nothing changes in a project until you explicitly approve a proposal.</p>
 <p id="message" role="status">Checking owner access…</p>
 <main id="workspace" hidden>
-<section><h2>Tell Jarvis about a project</h2><p class="muted">Describe a new project in your own words. Jarvis will extract what it can, then let you review everything before saving. This first version understands common project details; it is not connected to an AI model yet.</p><label for="naturalRequest">What would you like to create?</label><textarea id="naturalRequest" placeholder="Create a painting project at 123 Main Street for $4,000, starting November 2, scheduled."></textarea><button id="interpretRequest">Prepare project from my message</button><div id="interpretFeedback" class="muted" role="status"></div></section>
+<section><h2>Tell Jarvis about a project</h2><p class="muted">Project intake v2 · Oct 30</p><p class="muted">Describe a new project in your own words. Jarvis will extract what it can, then let you review everything before saving. This first version understands common project details; it is not connected to an AI model yet.</p><label for="naturalRequest">What would you like to create?</label><textarea id="naturalRequest" placeholder="Create a painting project at 123 Main Street for $4,000, starting November 2, scheduled."></textarea><button id="interpretRequest">Prepare project from my message</button><div id="interpretFeedback" class="muted" role="status"></div></section>
 <section><details><summary>Advanced: paste a structured project brief</summary><h2>Jarvis quick entry</h2><p class="muted">Paste a project brief prepared in ChatGPT. Review the extracted details in the form below before creating anything.</p><label for="quickBrief">Project brief</label><textarea id="quickBrief" placeholder="Project: Kitchen renovation&#10;Address: 123 Main St&#10;Contract amount: $4,500&#10;Status: scheduled&#10;Start date: 2026-11-02&#10;Description: Replace cabinets and paint walls"></textarea><button id="fillBrief">Fill project form from brief</button><p class="muted">Supported labels: Project, Address, Contract amount, Status, Start date, Target completion, Description, Owner notes. Use YYYY-MM-DD for dates. Nothing is saved until you approve.</p></details></section>
 <section><h2>Create a new project</h2><p class="muted">Enter project details, review the preview, then explicitly confirm creation. The new project is recorded in project history.</p>
 <label for="newName">Project name *</label><input id="newName" maxlength="200" placeholder="e.g. 123 Main Street renovation">
@@ -69,8 +69,9 @@ function parseNaturalRequest(raw){
  const date=text.match(/\b(?:starting|start(?:ing)?\s+on|start date(?: is|:)?|begins?\s+on)\s+(\d{4}-\d{2}-\d{2})\b/i);
  if(date)result.newStart=date[1];
  const name=text.match(/(?:create|add|start|open|set up)\s+(?:a|an|new|the|project\s+for|project\s+called|project\s+named|a new)\s+(.+?)(?=\s+(?:at|located at|for\s+\$|with\s+a|starting|scheduled|status|contract|budget)|[,.]|$)/i);
- if(name)result.newName=name[1].trim().replace(/\s+project$/i,' project');
+ if(name)result.newName=name[1].trim().replace(/^(?:a|an|new|the)\s+/i,'').replace(/\s+project$/i,' project');
  if(!result.newName&&result.newAddress)result.newName='Project - '+result.newAddress;
+ if(!result.newName){const start=text.match(/^(?:please\s+)?(?:create|add|open|set up)\s+(.+?)(?=\s+at\s+\d+|\s+for\s+\$|[,.]|$)/i);if(start)result.newName=start[1].replace(/^(?:(?:a|an|new|the)\s+)+/i,'').trim();}
  if(!result.newName)throw Error('I could not identify the project name. Try: Create a kitchen renovation project at 123 Main St for $4,000.');
  if(!money)notes.push('Contract amount not detected; please enter it below.');
  if(!address)notes.push('Address not detected; please enter it if needed.');
