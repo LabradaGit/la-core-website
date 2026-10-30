@@ -7,7 +7,7 @@ declare
  p public.jarvis_project_proposals%rowtype;
  item jsonb; k text; before_value jsonb; after_value jsonb;
  current_value jsonb; updates jsonb := '{}'::jsonb; applied integer := 0;
- allowed text[] := array['name','address','description','notes','status','start_date','target_completion_date','contract_amount'];
+ allowed text[] := array['name','address','project_description','owner_notes','project_status','start_date','target_completion_date','original_contract_amount'];
 begin
  if not public.is_owner_or_admin() then raise exception 'Owner access required'; end if;
  select * into p from public.jarvis_project_proposals where id=p_id for update;
@@ -25,11 +25,11 @@ begin
      into current_value using p.project_id;
    before_value := item->'old'; after_value := item->'new';
    if current_value is distinct from before_value then raise exception 'Project field % changed since proposal creation',k; end if;
-   if k = 'status' and (jsonb_typeof(after_value) <> 'string' or
+   if k = 'project_status' and (jsonb_typeof(after_value) <> 'string' or
      after_value #>> '{}' not in ('lead','scheduled','active','on_hold','completed','cancelled')) then
       raise exception 'Invalid project status';
    end if;
-   if k = 'contract_amount' and after_value <> 'null'::jsonb and
+   if k = 'original_contract_amount' and after_value <> 'null'::jsonb and
       (jsonb_typeof(after_value) <> 'number' or (after_value #>> '{}')::numeric < 0) then
       raise exception 'Invalid contract amount';
    end if;
@@ -40,12 +40,12 @@ begin
  update public.projects set
   name=coalesce((updates->>'name'),name),
   address=case when updates ? 'address' then updates->>'address' else address end,
-  description=case when updates ? 'description' then updates->>'description' else description end,
-  notes=case when updates ? 'notes' then updates->>'notes' else notes end,
-  status=coalesce((updates->>'status'),status),
+  project_description=case when updates ? 'project_description' then updates->>'project_description' else project_description end,
+  owner_notes=case when updates ? 'owner_notes' then updates->>'owner_notes' else owner_notes end,
+  project_status=coalesce((updates->>'project_status'),project_status),
   start_date=case when updates ? 'start_date' then (updates->>'start_date')::date else start_date end,
   target_completion_date=case when updates ? 'target_completion_date' then (updates->>'target_completion_date')::date else target_completion_date end,
-  contract_amount=case when updates ? 'contract_amount' then (updates->>'contract_amount')::numeric else contract_amount end
+  original_contract_amount=case when updates ? 'original_contract_amount' then (updates->>'original_contract_amount')::numeric else original_contract_amount end
  where id=p.project_id;
  update public.jarvis_project_proposals
  set status='applied', reviewed_at=now(), reviewed_by=auth.uid(), applied_at=now()
